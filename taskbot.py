@@ -10,8 +10,8 @@ import sqlalchemy
 import db
 from db import Task
 
-TOKEN = ""
-URL = "https://api.telegram.org/bot{}/".format(TOKEN)
+TOKEN = open("token.txt", 'r')
+URL = "https://api.telegram.org/bot{}/".format(TOKEN.read())
 
 HELP = """
  /new NOME
@@ -23,19 +23,23 @@ HELP = """
  /rename ID NOME
  /dependson ID ID...
  /duplicate ID
- /priority ID PRIORITY{low, medium, high}
+ /setPriority ID PRIORITY{low, medium, high}
+ /showPriority 
  /help
 """
+
 
 def get_url(url):
     response = requests.get(url)
     content = response.content.decode("utf8")
     return content
 
+
 def get_json_from_url(url):
     content = get_url(url)
     js = json.loads(content)
     return js
+
 
 def get_updates(offset=None):
     url = URL + "getUpdates?timeout=100"
@@ -44,6 +48,7 @@ def get_updates(offset=None):
     js = get_json_from_url(url)
     return js
 
+
 def send_message(text, chat_id, reply_markup=None):
     text = urllib.parse.quote_plus(text)
     url = URL + "sendMessage?text={}&chat_id={}&parse_mode=Markdown".format(text, chat_id)
@@ -51,12 +56,14 @@ def send_message(text, chat_id, reply_markup=None):
         url += "&reply_markup={}".format(reply_markup)
     get_url(url)
 
+
 def get_last_update_id(updates):
     update_ids = []
     for update in updates["result"]:
         update_ids.append(int(update["update_id"]))
 
     return max(update_ids)
+
 
 def deps_text(task, chat, preceed=''):
     text = ''
@@ -82,6 +89,99 @@ def deps_text(task, chat, preceed=''):
         text += line
 
     return text
+
+
+def printTasks(query, chat, message):
+    for task in query.all():
+        icon = '\U0001F195'
+        if task.status == 'DOING':
+            icon = '\U000023FA'
+        elif task.status == 'DONE':
+            icon = '\U00002611'
+        message += '[[{}]] {} {} _{}_\n'.format(task.id, icon, task.name, task.priority)
+        message += deps_text(task, chat)
+    return message
+
+def list(chat):
+    query = db.session.query(Task).filter_by(parents='', chat=chat).order_by(Task.id)
+    queryTODO = db.session.query(Task).filter_by(status='TODO', chat=chat).order_by(Task.id)
+    queryDOING = db.session.query(Task).filter_by(status='DOING', chat=chat).order_by(Task.id)
+    queryDONE = db.session.query(Task).filter_by(status='DONE', chat=chat).order_by(Task.id)
+
+    a = ''
+    a += '\U0001F4CB Task List\n'
+    a = printTasks(query, chat, a)
+    send_message(a, chat)
+    a = ''
+    a += '\U0001F4DD _Status_\n'
+    a += '\n\U0001F195 *TODO*\n'
+    a = printTasks(queryTODO, chat, a)
+    a += '\n\U000023FA *DOING*\n'
+    a = printTasks(queryDOING, chat, a)
+    a += '\n\U00002611 *DONE*\n'
+    a = printTasks(queryDONE, chat, a)
+    send_message(a, chat)
+
+
+def showPriority(chat):
+    queryHigh = db.session.query(Task).filter_by(parents='', chat=chat, priority='high').order_by(Task.id)
+    queryMedium = db.session.query(Task).filter_by(parents='', chat=chat, priority='medium').order_by(Task.id)
+    queryLow = db.session.query(Task).filter_by(parents='', chat=chat, priority='low').order_by(Task.id)
+    query = db.session.query(Task).filter_by(parents='', chat=chat, priority='').order_by(Task.id)
+
+    queryHighTODO = db.session.query(Task).filter_by(status='TODO', parents='', chat=chat,
+                                                     priority='high').order_by(Task.id)
+    queryMediumTODO = db.session.query(Task).filter_by(status='TODO', parents='', chat=chat,
+                                                       priority='medium').order_by(Task.id)
+    queryLowTODO = db.session.query(Task).filter_by(status='TODO', parents='', chat=chat,
+                                                    priority='low').order_by(Task.id)
+    queryTODO = db.session.query(Task).filter_by(status='TODO', parents='', chat=chat, priority='').order_by(
+        Task.id)
+
+    queryHighDOING = db.session.query(Task).filter_by(status='DOING', parents='', chat=chat,
+                                                      priority='high').order_by(Task.id)
+    queryMediumDOING = db.session.query(Task).filter_by(status='DOING', parents='', chat=chat,
+                                                        priority='medium').order_by(Task.id)
+    queryLowDOING = db.session.query(Task).filter_by(status='DOING', parents='', chat=chat,
+                                                     priority='low').order_by(Task.id)
+    queryDOING = db.session.query(Task).filter_by(status='DOING', parents='', chat=chat, priority='').order_by(
+        Task.id)
+
+    queryHighDONE = db.session.query(Task).filter_by(status='DONE', parents='', chat=chat,
+                                                     priority='high').order_by(Task.id)
+    queryMediumDONE = db.session.query(Task).filter_by(status='DONE', parents='', chat=chat,
+                                                       priority='medium').order_by(Task.id)
+    queryLowDONE = db.session.query(Task).filter_by(status='DONE', parents='', chat=chat,
+                                                    priority='low').order_by(Task.id)
+    queryDONE = db.session.query(Task).filter_by(status='DONE', parents='', chat=chat, priority='').order_by(
+        Task.id)
+
+    a = ''
+    a += '\U0001F4CB Task List\n'
+    a = printTasks(queryHigh, chat, a)
+    a = printTasks(queryMedium, chat, a)
+    a = printTasks(queryLow, chat, a)
+    a = printTasks(query, chat, a)
+    send_message(a, chat)
+
+    a = ''
+    a += '\U0001F4DD _Status_\n'
+    a += '\n\U0001F195 *TODO*\n'
+    a = printTasks(queryHighTODO, chat, a)
+    a = printTasks(queryMediumTODO, chat, a)
+    a = printTasks(queryLowTODO, chat, a)
+    a = printTasks(queryTODO, chat, a)
+    a += '\n\U000023FA *DOING*\n'
+    a = printTasks(queryHighDOING, chat, a)
+    a = printTasks(queryMediumDOING, chat, a)
+    a = printTasks(queryLowDOING, chat, a)
+    a = printTasks(queryDOING, chat, a)
+    a += '\n\U00002611 *DONE*\n'
+    a = printTasks(queryHighDONE, chat, a)
+    a = printTasks(queryMediumDONE, chat, a)
+    a = printTasks(queryLowDONE, chat, a)
+    a = printTasks(queryDONE, chat, a)
+    send_message(a, chat)
 
 
 def handle_updates(updates):
@@ -128,7 +228,8 @@ def handle_updates(updates):
                     return
 
                 if text == '':
-                    send_message("You want to modify task {}, but you didn't provide any new text".format(task_id), chat)
+                    send_message("You want to modify task {}, but you didn't provide any new text".format(task_id),
+                                 chat)
                     return
 
                 old_text = task.name
@@ -224,38 +325,7 @@ def handle_updates(updates):
                 send_message("*DONE* task [[{}]] {}".format(task.id, task.name), chat)
 
         elif command == '/list':
-            a = ''
-
-            a += '\U0001F4CB Task List\n'
-            query = db.session.query(Task).filter_by(parents='', chat=chat).order_by(Task.id)
-            for task in query.all():
-                icon = '\U0001F195'
-                if task.status == 'DOING':
-                    icon = '\U000023FA'
-                elif task.status == 'DONE':
-                    icon = '\U00002611'
-
-                a += '[[{}]] {} {}\n'.format(task.id, icon, task.name)
-                a += deps_text(task, chat)
-
-            send_message(a, chat)
-            a = ''
-
-            a += '\U0001F4DD _Status_\n'
-            query = db.session.query(Task).filter_by(status='TODO', chat=chat).order_by(Task.id)
-            a += '\n\U0001F195 *TODO*\n'
-            for task in query.all():
-                a += '[[{}]] {}\n'.format(task.id, task.name)
-            query = db.session.query(Task).filter_by(status='DOING', chat=chat).order_by(Task.id)
-            a += '\n\U000023FA *DOING*\n'
-            for task in query.all():
-                a += '[[{}]] {}\n'.format(task.id, task.name)
-            query = db.session.query(Task).filter_by(status='DONE', chat=chat).order_by(Task.id)
-            a += '\n\U00002611 *DONE*\n'
-            for task in query.all():
-                a += '[[{}]] {}\n'.format(task.id, task.name)
-
-            send_message(a, chat)
+            list(chat)
         elif command == '/dependson':
             text = ''
             if msg != '':
@@ -303,7 +373,7 @@ def handle_updates(updates):
 
                 db.session.commit()
                 send_message("Task {} dependencies up to date".format(task_id), chat)
-        elif command == '/priority':
+        elif command == '/setPriority':
             text = ''
             if msg != '':
                 if len(msg.split(' ', 1)) > 1:
@@ -331,7 +401,8 @@ def handle_updates(updates):
                         task.priority = text.lower()
                         send_message("*Task {}* priority has priority *{}*".format(task_id, text.lower()), chat)
                 db.session.commit()
-
+        elif command == '/showPriority':
+            showPriority(chat)
         elif command == '/start':
             send_message("Welcome! Here is a list of things you can do.", chat)
             send_message(HELP, chat)
@@ -358,4 +429,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
