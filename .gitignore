@@ -113,3 +113,6 @@ Session.vim
 tags
 
 token.txt
+\.idea/
+
+\.directory
