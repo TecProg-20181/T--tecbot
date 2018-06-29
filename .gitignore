@@ -113,6 +113,8 @@ Session.vim
 tags
 
 token.txt
+user.txt
+password.txt
 \.idea/
 
 \.directory

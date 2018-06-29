@@ -11,23 +11,28 @@ import db
 from db import Task
 
 TOKEN = open("token.txt", 'r')
+USER = open("user.txt", 'r').read()
+PASSWORD = open("password.txt", 'r').read()
 URL = "https://api.telegram.org/bot{}/".format(TOKEN.read())
 
 HELP = """
- /new NOME
+ /new TITLE BODY
  /todo ID
  /doing ID
  /done ID
  /delete ID
  /list
- /rename ID NOME
+ /rename ID TITLE
  /dependson ID ID...
  /duplicate ID
  /setPriority ID PRIORITY{low, medium, high}
- /showPriority 
+ /showPriority
+ /createIssue TITLE BODY
+ /duedate ID DATE{DD/MM/YYYY}
  /help
 """
-
+REPO_OWNER = 'TecProg-20181'
+REPO_NAME = 'T--Tecbot'
 
 def get_url(url):
     response = requests.get(url)
@@ -90,7 +95,6 @@ def deps_text(task, chat, preceed=''):
 
     return text
 
-
 def printTasks(query, chat, message):
     for task in query.all():
         icon = '\U0001F195'
@@ -98,7 +102,10 @@ def printTasks(query, chat, message):
             icon = '\U000023FA'
         elif task.status == 'DONE':
             icon = '\U00002611'
-        message += '[[{}]] {} {} _{}_\n'.format(task.id, icon, task.name, task.priority)
+        if task.duedate == None:
+            message += '[[{}]] {} {} _{}_\n'.format(task.id, icon, task.name, task.priority)
+        else:
+            message += '[[{}]] {} {} _{}_ {}\n'.format(task.id, icon, task.name, task.priority, task.duedate)
         message += deps_text(task, chat)
     return message
 
@@ -108,19 +115,19 @@ def list(chat):
     queryDOING = db.session.query(Task).filter_by(status='DOING', chat=chat).order_by(Task.id)
     queryDONE = db.session.query(Task).filter_by(status='DONE', chat=chat).order_by(Task.id)
 
-    a = ''
-    a += '\U0001F4CB Task List\n'
-    a = printTasks(query, chat, a)
-    send_message(a, chat)
-    a = ''
-    a += '\U0001F4DD _Status_\n'
-    a += '\n\U0001F195 *TODO*\n'
-    a = printTasks(queryTODO, chat, a)
-    a += '\n\U000023FA *DOING*\n'
-    a = printTasks(queryDOING, chat, a)
-    a += '\n\U00002611 *DONE*\n'
-    a = printTasks(queryDONE, chat, a)
-    send_message(a, chat)
+    text = ''
+    text += '\U0001F4CB Task List\n'
+    text = printTasks(query, chat, text)
+    send_message(text, chat)
+    text = ''
+    text += '\U0001F4DD _Status_\n'
+    text += '\n\U0001F195 *TODO*\n'
+    text = printTasks(queryTODO, chat, text)
+    text += '\n\U000023FA *DOING*\n'
+    text = printTasks(queryDOING, chat, text)
+    text += '\n\U00002611 *DONE*\n'
+    text = printTasks(queryDONE, chat, text)
+    send_message(text, chat)
 
 
 def showPriority(chat):
@@ -156,36 +163,42 @@ def showPriority(chat):
     queryDONE = db.session.query(Task).filter_by(status='DONE', parents='', chat=chat, priority='').order_by(
         Task.id)
 
-    a = ''
-    a += '\U0001F4CB Task List\n'
-    a = printTasks(queryHigh, chat, a)
-    a = printTasks(queryMedium, chat, a)
-    a = printTasks(queryLow, chat, a)
-    a = printTasks(query, chat, a)
-    send_message(a, chat)
+    text = ''
+    text += '\U0001F4CB Task List\n'
+    text = printTasks(queryHigh, chat, text)
+    text = printTasks(queryMedium, chat, text)
+    text = printTasks(queryLow, chat, text)
+    text = printTasks(query, chat, text)
+    send_message(text, chat)
 
-    a = ''
-    a += '\U0001F4DD _Status_\n'
-    a += '\n\U0001F195 *TODO*\n'
-    a = printTasks(queryHighTODO, chat, a)
-    a = printTasks(queryMediumTODO, chat, a)
-    a = printTasks(queryLowTODO, chat, a)
-    a = printTasks(queryTODO, chat, a)
-    a += '\n\U000023FA *DOING*\n'
-    a = printTasks(queryHighDOING, chat, a)
-    a = printTasks(queryMediumDOING, chat, a)
-    a = printTasks(queryLowDOING, chat, a)
-    a = printTasks(queryDOING, chat, a)
-    a += '\n\U00002611 *DONE*\n'
-    a = printTasks(queryHighDONE, chat, a)
-    a = printTasks(queryMediumDONE, chat, a)
-    a = printTasks(queryLowDONE, chat, a)
-    a = printTasks(queryDONE, chat, a)
-    send_message(a, chat)
+    text = ''
+    text += '\U0001F4DD _Status_\n'
+    text += '\n\U0001F195 *TODO*\n'
+    text = printTasks(queryHighTODO, chat, text)
+    text = printTasks(queryMediumTODO, chat, text)
+    text = printTasks(queryLowTODO, chat, text)
+    text = printTasks(queryTODO, chat, text)
+    text += '\n\U000023FA *DOING*\n'
+    text = printTasks(queryHighDOING, chat, text)
+    text = printTasks(queryMediumDOING, chat, text)
+    text = printTasks(queryLowDOING, chat, text)
+    text = printTasks(queryDOING, chat, text)
+    text += '\n\U00002611 *DONE*\n'
+    text = printTasks(queryHighDONE, chat, text)
+    text = printTasks(queryMediumDONE, chat, text)
+    text = printTasks(queryLowDONE, chat, text)
+    text = printTasks(queryDONE, chat, text)
+    send_message(text, chat)
 
 
 def creteNewTask(chat, msg):
-    task = Task(chat=chat, name=msg, status='TODO', dependencies='', parents='', priority='')
+    body = ''
+    if msg != '':
+        if len(msg.split(' ', 1)) > 1:
+            body = msg.split(' ', 1)[1]
+        title = msg.split(' ', 1)[0]
+
+    task = Task(chat=chat, name=title, status='TODO', dependencies='', parents='', priority='')
     db.session.add(task)
     db.session.commit()
     send_message("New task *TODO* [[{}]] {}".format(task.id, task.name), chat)
@@ -262,19 +275,23 @@ def deleteTask(msg, chat):
         send_message("Task [[{}]] deleted".format(task_id), chat)
 
 def moveTask(msg, chat, status):
-    if not msg.isdigit():
-        send_message("You must inform the task id", chat)
-    else:
-        task_id = int(msg)
-        query = db.session.query(Task).filter_by(id=task_id, chat=chat)
-        try:
-            task = query.one()
-        except sqlalchemy.orm.exc.NoResultFound:
-            send_message("_404_ Task {} not found x.x".format(task_id), chat)
-            return
-        task.status = status
-        db.session.commit()
-        return task
+    text = ''
+    for _id in msg.split(' '):
+        if not _id.isdigit():
+            send_message("You must inform the task id", chat)
+        else:
+            task_id = int(_id)
+            query = db.session.query(Task).filter_by(id=task_id, chat=chat)
+            try:
+                task = query.one()
+            except sqlalchemy.orm.exc.NoResultFound:
+                send_message("_404_ Task {} not found x.x".format(task_id), chat)
+                return
+            task.status = status
+            db.session.commit()
+            text += status
+            text += " task [[{}]] {}\n".format(task.id, task.name)
+    return text
 
 
 def setPriorityInATask(msg, chat):
@@ -354,6 +371,116 @@ def setDependent(msg, chat):
         db.session.commit()
         send_message("Task {} dependencies up to date".format(task_id), chat)
 
+def createGithubIssue(msg, chat):
+
+    body = ''
+    if msg != '':
+        if len(msg.split(' ', 1)) > 1:
+            body = msg.split(' ', 1)[1]
+        title = msg.split(' ', 1)[0]
+
+    url = 'https://api.github.com/repos/%s/%s/issues' % (REPO_OWNER, REPO_NAME)
+
+    session = requests.session()
+    session.auth = (USER, PASSWORD)
+
+    issue = {'title': title, "body": body}
+
+    r = session.post(url, json.dumps(issue))
+
+    if r.status_code == 201:
+        send_message('Successfully created Issue', chat)
+    else:
+        send_message('Could''t create Issue', chat)
+
+# def listGithubIssues(msg, chat):
+
+#     # body = ''
+#     # if msg != '':
+#     #     if len(msg.split(' ', 1)) > 1:
+#     #         body = msg.split(' ', 1)[1]
+#     #     title = msg.split(' ', 1)[0]
+
+#     '''Create an issue on github.com using the given parameters.'''
+#     # Our url to create issues via POST
+#     url = 'https://api.github.com/repos/%s/%s/issues/%s' % (REPO_OWNER, REPO_NAME, msg)
+#     # authenticated session to create the issue
+#     session = requests.session()
+#     session.auth = ('marcelo-magalhaes', 'intheendnumb08')
+#     # Create our issue
+#     # issue = {'title': title, "body": body}
+#     # Add the issue to our repository
+#     r = session.get(url)
+#     # print(json.dumps(r))
+#     if r.status_code == 200:
+#         text = ''
+
+#         print(json.dumps(r.content.decode('utf8')), indent=4, sort_keys=True)
+#         issue = json.dumps(r.content.decode('utf8'), indent=4, sort_keys=True)
+#         print(issue)
+#         text += 'Issue id: '
+#         text += issue.number
+#         text += '\n'
+#         text += 'Issue title: '
+#         text += issue.title
+#         text += '\n'
+#         text += 'Issue state: '
+#         text += issue.state
+#         text += '\n'
+#         text += 'Issue body: '
+#         text += issue.body
+#         text += '\n\n'
+
+#         send_message(text, chat)
+#         return True
+#     else:
+#         send_message("Could't get Issues", chat)
+#         print ('Response:', r.content)
+#         return False
+
+
+
+def setDueDate(chat, msg):
+    """Set date to the task."""
+    text = ''
+    task = Task
+
+    if msg != '':
+        if len(msg.split(' ', 1)) > 1:
+            text = msg.split(' ', 1)[1]
+        msg = msg.split(' ', 1)[0]
+
+    if not msg.isdigit():
+        send_message("You have to inform the task id", chat)
+
+    else:
+        task_id = int(msg)
+        query = db.session.query(Task).filter_by(id=task_id, chat=chat)
+
+        try:
+            task = query.one()
+
+        except sqlalchemy.orm.exc.NoResultFound:
+            send_message("_404_ Task {} not found x.x".format(task_id), chat)
+
+    if text == '':
+        task.duedate = ''
+        send_message("_Cleared_ due date from task {}".format(task_id), chat)
+
+    else:
+        text = text.split("/")
+        text.reverse()
+    if not (1 <= int(text[2]) <= 31 and 1 <= int(text[1]) <= 12 and 2018 <= int(text[0])):
+        send_message(
+        "The date format is: *DD/MM/YYYY* Max day = 31, Max mouth = 12 and Min year = 2018)", chat)
+
+    else:
+        from datetime import datetime
+        task.duedate = datetime.strptime(" ".join(text), '%Y %m %d')
+        send_message(
+         "Task {} has the due date *{}*".format(task_id, task.duedate), chat)
+        db.session.commit()
+
 
 def handle_updates(updates):
     for update in updates["result"]:
@@ -375,7 +502,14 @@ def handle_updates(updates):
         print(command, msg, chat)
 
         if command == '/new':
+            createGithubIssue(msg, chat)        
             creteNewTask(chat, msg)
+        elif command == '/createIssue':
+            createGithubIssue(msg, chat)        
+        # elif command == '/listIssues':
+        #     listGithubIssues(msg, chat)
+        elif command == '/duedate':
+            setDueDate(chat, msg)
         elif command == '/rename':
             renameTask(msg, chat)
         elif command == '/duplicate':
@@ -385,15 +519,15 @@ def handle_updates(updates):
         elif command == '/todo':
             task = moveTask(msg, chat, 'TODO')
             if(task):
-                send_message("*TODO* task [[{}]] {}".format(task.id, task.name), chat)
+                send_message(task, chat)
         elif command == '/doing':
             task = moveTask(msg, chat, 'DOING')
             if(task):
-                send_message("*DOING* task [[{}]] {}".format(task.id, task.name), chat)
+                send_message(task, chat)
         elif command == '/done':
             task = moveTask(msg, chat, 'DONE')
-            if (task):
-                send_message("*DONE* task [[{}]] {}".format(task.id, task.name), chat)
+            if(task):
+                send_message(task, chat)
         elif command == '/list':
             list(chat)
         elif command == '/dependson':
@@ -403,10 +537,10 @@ def handle_updates(updates):
         elif command == '/showPriority':
             showPriority(chat)
         elif command == '/start':
-            send_message("Welcome! Here is a list of things you can do.", chat)
+            send_message("Welcome! Here is text list of things you can do.", chat)
             send_message(HELP, chat)
         elif command == '/help':
-            send_message("Here is a list of things you can do.", chat)
+            send_message("Here is text list of things you can do.", chat)
             send_message(HELP, chat)
         else:
             send_message("I'm sorry dave. I'm afraid I can't do that.", chat)
